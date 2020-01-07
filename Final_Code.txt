@@ -24,7 +24,6 @@ const int s_SHOW = 7;
 const int engine = 2;
 const int Show_Up = 10;
 const int Show_Down = 11;
-// RGB leds[NUM_STRIPS][N_LEDS];
 
  boolean blinks = 0;
  boolean Start = 0;
@@ -50,8 +49,6 @@ const int Show_Down = 11;
  
 Adafruit_NeoPixel strip1 = Adafruit_NeoPixel(N_LEDS, 8, NEO_GRB + NEO_KHZ800);
 Adafruit_NeoPixel strip2 = Adafruit_NeoPixel(N_LEDS, 9, NEO_GRB + NEO_KHZ800);
-//Adafruit_NeoPixel strip3 = Adafruit_NeoPixel(N_LEDS, 10, NEO_GRB + NEO_KHZ800);
-//Adafruit_NeoPixel strip4 = Adafruit_NeoPixel(N_LEDS, 11, NEO_GRB + NEO_KHZ800);
  
 void setup() {
   pinMode(b_LEFT, INPUT);
@@ -65,27 +62,21 @@ void setup() {
   pinMode(Show_Down, INPUT);
   
   Serial.begin(9600);
-  strip1.begin();
-  strip2.begin();
-  //strip3.begin();
-  //strip4.begin();
-  //FastLED.addLeds<NEOPIXEL, 8>(leds[0], N_LEDS); //led rear left
-  //FastLED.addLeds<NEOPIXEL, 9>(leds[1], N_LEDS); //led rear right
-  //FastLED.addLeds<NEOPIXEL, 10>(leds[2], N_LEDS); //led strip tail break reverse fog left
-  //FastLED.addLeds<NEOPIXEL, 11>(leds[3], N_LEDS); //led strip tail break reverse fog right
+  strip1.begin(); //Initialize strip1
+  strip2.begin(); //Initialize strip2
+  //strip3.begin(); //Initialize strip3 (Not Used)
+  //strip4.begin(); //Initialize strip4 (Not Used)
 
-  attachInterrupt(digitalPinToInterrupt(engine),EngineOn,RISING); // we use interrupt for instant reaction of turn lights
-  //attachInterrupt(digitalPinToInterrupt(b_LEFT),LEFT_SIGNAL,RISING); // we use interrupt for instant reaction of turn lights
-  //attachInterrupt(digitalPinToInterrupt(b_RIGHT),RIGHT_SIGNAL,RISING); // we use interrupt for instant reaction of turn lights
+  attachInterrupt(digitalPinToInterrupt(engine),EngineOn,RISING); // we use interrupt for instant reaction of engine
 
-  strip1.fill(strip1.Color(0, 0, 0)); //Left
-  strip2.fill(strip2.Color(0, 0, 0)); //Right
-  //strip3.fill(strip3.Color(0, 0, 0));
-  //strip4.fill(strip4.Color(0, 0, 0));
-  strip1.show();
-  strip2.show();
-  //strip3.show();
-  //strip4.show();
+  strip1.fill(strip1.Color(0, 0, 0)); //Left tail light
+  strip2.fill(strip2.Color(0, 0, 0)); //Right tail light
+  //strip3.fill(strip3.Color(0, 0, 0)); //Left head light (Not Used)
+  //strip4.fill(strip4.Color(0, 0, 0)); //Right tail light (Not used)
+  strip1.show(); //Update strip 1
+  strip2.show(); //Update strip 2
+  //strip3.show(); //Update strip 3 (Not Used)
+  //strip4.show(); //Update strip 4 (Not Used)
 
 }
 
@@ -95,15 +86,8 @@ void loop() {
   Brake = digitalRead(b_BRAKE);
   TailLights = digitalRead(b_TAIL);
   Reverse = digitalRead(b_REVERSE);
-  //Show = digitalRead(s_SHOW);
-  //Serial.print(Show);
-  GetOut = 0;
   Debouncing(); //function for debouncing
 
-  /*if(Show == LOW) {
-    mode = 1;
-    Serial.print("ASHDJKASD\n");
-  }*/
   if(TailLights == HIGH) {
     if(tailLightFlag==0){
       for(int pixel = 0; pixel<N_LEDS; pixel++){
@@ -130,33 +114,25 @@ void loop() {
   else if(LEFTstate == HIGH && RIGHTstate == LOW) mode = 4;
   else if(Show == 0 && LEFTstate == LOW && RIGHTstate == LOW) mode = 0;
 
-  if(Start == 1){
+  if(Start == 1){ //This is the animation for engine start up
     for(int pixel = 71; pixel>=0; pixel--){
         strip1.setPixelColor(pixel, strip1.ColorHSV((pixel+72)*455));
-        //strip2.setPixelColor(pixel, strip2.ColorHSV(pixel*910));
         strip1.show();
-       // strip2.show();
         delay(15);
      }
      for(int pixel = 0; pixel<72; pixel++){
-       // strip1.setPixelColor(pixel, strip1.ColorHSV(pixel*455));
         strip2.setPixelColor(pixel, strip2.ColorHSV((72-pixel)*455));
-       // strip1.show();
         strip2.show();
         delay(15);
      }
      for(int pixel = 71; pixel>=0; pixel--){
-        //strip1.setPixelColor(pixel, strip1.Color(255,0,0));
         strip2.setPixelColor(pixel, strip2.Color(255,0,0));
-       // strip1.show();
         strip2.show();
         delay(5);
      }
      for(int pixel = 0; pixel<72; pixel++){
         strip1.setPixelColor(pixel, strip1.Color(255,0,0));
-       // strip2.setPixelColor(pixel, strip2.Color(255,0,0));
         strip1.show();
-        //strip2.show();
         delay(5);
      }
      for(int fade = 255; fade>0; fade--){
@@ -164,13 +140,12 @@ void loop() {
           strip2.fill(strip2.Color(fade, 0, 0));
           strip1.show();
           strip2.show();
-          //delay(2);
      }
      Start = 0;
   }
 
-  if(Brake == HIGH && Reverse == LOW){
-    BrakeFlag = 1;
+  if(Brake == HIGH && Reverse == LOW){ //Condition for Brake:ON and Reverse:OFF
+    BrakeFlag = 1; //flag 
     if(blinks == 0){
       for(int q = 0; q<3; q++){
          strip1.fill(strip1.Color(255, 0, 0));
@@ -183,7 +158,7 @@ void loop() {
          strip1.show();
          strip2.show();
          delay(100);
-    }
+     }
       strip1.fill(strip1.Color(255, 0, 0));
       strip2.fill(strip2.Color(255, 0, 0));
       strip1.show();
@@ -214,8 +189,6 @@ void loop() {
           wait = 0;
         }
         data2 = 0;
-//        Serial.print(wait);
-//        Serial.print('\n');
         break;
       
       case 1:
