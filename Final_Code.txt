@@ -1,0 +1,888 @@
+#include <Adafruit_NeoPixel.h>
+// #include <FastLED.h>
+#define NUM_STRIPS 2                 
+
+
+/*
+ * Example of simple bluetooth integration
+ * (I probably should have used interrupts instead of polling)
+ * Data is transferred via bluetooth and held in Serial buffer
+ * Incoming data can then be read (or written) from the port
+ * 
+ * Module: HC-08
+ * iOS application: ArduinoBlue
+ */
+
+//const int N_LEDS = 72;
+const int N_LEDS = 72;
+const int b_LEFT = 12;
+const int b_RIGHT = 3;
+const int b_BRAKE = 4;
+const int b_TAIL = 5;
+const int b_REVERSE = 6;
+const int s_SHOW = 7;
+const int engine = 2;
+const int Show_Up = 10;
+const int Show_Down = 11;
+// RGB leds[NUM_STRIPS][N_LEDS];
+
+ boolean blinks = 0;
+ boolean Start = 0;
+ int wait = 0;
+ int tailLight = 0;
+ int mode = 0;
+ int LEFTstate = 0;
+ int RIGHTstate = 0;
+ int LeftSignal = 0;
+ int RightSignal = 0;
+ int Brake = 0;
+ int TailLights = 0;
+ int Reverse = 0;
+ boolean Show = 0;
+ boolean debounce = 0;
+ boolean GetOut = 0;
+ boolean tailLightFlag = 0;
+ boolean BrakeFlag = 0;
+ //int debounceTime = 0;
+ int debounceState = 0;
+ char data;
+ int data2 = 0;
+ 
+Adafruit_NeoPixel strip1 = Adafruit_NeoPixel(N_LEDS, 8, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel strip2 = Adafruit_NeoPixel(N_LEDS, 9, NEO_GRB + NEO_KHZ800);
+//Adafruit_NeoPixel strip3 = Adafruit_NeoPixel(N_LEDS, 10, NEO_GRB + NEO_KHZ800);
+//Adafruit_NeoPixel strip4 = Adafruit_NeoPixel(N_LEDS, 11, NEO_GRB + NEO_KHZ800);
+ 
+void setup() {
+  pinMode(b_LEFT, INPUT);
+  pinMode(b_RIGHT, INPUT);
+  pinMode(b_BRAKE, INPUT);
+  pinMode(b_TAIL, INPUT);
+  pinMode(b_REVERSE, INPUT);
+  pinMode(s_SHOW, INPUT);
+  pinMode(engine, INPUT);
+  pinMode(Show_Up, INPUT);
+  pinMode(Show_Down, INPUT);
+  
+  Serial.begin(9600);
+  strip1.begin();
+  strip2.begin();
+  //strip3.begin();
+  //strip4.begin();
+  //FastLED.addLeds<NEOPIXEL, 8>(leds[0], N_LEDS); //led rear left
+  //FastLED.addLeds<NEOPIXEL, 9>(leds[1], N_LEDS); //led rear right
+  //FastLED.addLeds<NEOPIXEL, 10>(leds[2], N_LEDS); //led strip tail break reverse fog left
+  //FastLED.addLeds<NEOPIXEL, 11>(leds[3], N_LEDS); //led strip tail break reverse fog right
+
+  attachInterrupt(digitalPinToInterrupt(engine),EngineOn,RISING); // we use interrupt for instant reaction of turn lights
+  //attachInterrupt(digitalPinToInterrupt(b_LEFT),LEFT_SIGNAL,RISING); // we use interrupt for instant reaction of turn lights
+  //attachInterrupt(digitalPinToInterrupt(b_RIGHT),RIGHT_SIGNAL,RISING); // we use interrupt for instant reaction of turn lights
+
+  strip1.fill(strip1.Color(0, 0, 0)); //Left
+  strip2.fill(strip2.Color(0, 0, 0)); //Right
+  //strip3.fill(strip3.Color(0, 0, 0));
+  //strip4.fill(strip4.Color(0, 0, 0));
+  strip1.show();
+  strip2.show();
+  //strip3.show();
+  //strip4.show();
+
+}
+
+void loop() {
+  LeftSignal = digitalRead(b_LEFT);
+  RightSignal = digitalRead(b_RIGHT);
+  Brake = digitalRead(b_BRAKE);
+  TailLights = digitalRead(b_TAIL);
+  Reverse = digitalRead(b_REVERSE);
+  //Show = digitalRead(s_SHOW);
+  //Serial.print(Show);
+  GetOut = 0;
+  Debouncing(); //function for debouncing
+
+  /*if(Show == LOW) {
+    mode = 1;
+    Serial.print("ASHDJKASD\n");
+  }*/
+  if(TailLights == HIGH) {
+    if(tailLightFlag==0){
+      for(int pixel = 0; pixel<N_LEDS; pixel++){
+            strip1.setPixelColor(pixel, strip1.Color(40, 0, 0));
+            strip2.setPixelColor(pixel, strip2.Color(40, 0, 0));
+            strip1.show();
+            strip2.show();
+            delay(2);
+            if(digitalRead (b_BRAKE)== HIGH) break;
+            if(digitalRead (b_TAIL)==LOW) tailLightFlag = 0; break;
+        }
+      tailLightFlag = 1; 
+    }
+    tailLight = 40;
+  }
+  else tailLight = 0; tailLightFlag = 0;
+  if(LeftSignal == HIGH) LEFTstate = 1; else LEFTstate = 0;
+  if(RightSignal == HIGH) RIGHTstate = 1; else RIGHTstate = 0;
+
+  if(Show == HIGH) mode = 1; 
+  //Don't change left and right state low
+  else if(LEFTstate == HIGH && RIGHTstate == HIGH) mode = 2;
+  else if(LEFTstate == LOW && RIGHTstate == HIGH) mode = 3;
+  else if(LEFTstate == HIGH && RIGHTstate == LOW) mode = 4;
+  else if(Show == 0 && LEFTstate == LOW && RIGHTstate == LOW) mode = 0;
+
+  if(Start == 1){
+    for(int pixel = 71; pixel>=0; pixel--){
+        strip1.setPixelColor(pixel, strip1.ColorHSV((pixel+72)*455));
+        //strip2.setPixelColor(pixel, strip2.ColorHSV(pixel*910));
+        strip1.show();
+       // strip2.show();
+        delay(15);
+     }
+     for(int pixel = 0; pixel<72; pixel++){
+       // strip1.setPixelColor(pixel, strip1.ColorHSV(pixel*455));
+        strip2.setPixelColor(pixel, strip2.ColorHSV((72-pixel)*455));
+       // strip1.show();
+        strip2.show();
+        delay(15);
+     }
+     for(int pixel = 71; pixel>=0; pixel--){
+        //strip1.setPixelColor(pixel, strip1.Color(255,0,0));
+        strip2.setPixelColor(pixel, strip2.Color(255,0,0));
+       // strip1.show();
+        strip2.show();
+        delay(5);
+     }
+     for(int pixel = 0; pixel<72; pixel++){
+        strip1.setPixelColor(pixel, strip1.Color(255,0,0));
+       // strip2.setPixelColor(pixel, strip2.Color(255,0,0));
+        strip1.show();
+        //strip2.show();
+        delay(5);
+     }
+     for(int fade = 255; fade>0; fade--){
+          strip1.fill(strip1.Color(fade, 0, 0));
+          strip2.fill(strip2.Color(fade, 0, 0));
+          strip1.show();
+          strip2.show();
+          //delay(2);
+     }
+     Start = 0;
+  }
+
+  if(Brake == HIGH && Reverse == LOW){
+    BrakeFlag = 1;
+    if(blinks == 0){
+      for(int q = 0; q<3; q++){
+         strip1.fill(strip1.Color(255, 0, 0));
+         strip2.fill(strip2.Color(255, 0, 0));
+         strip1.show();
+         strip2.show();
+         delay(50);
+         strip1.fill(strip1.Color(0, 0, 0));
+         strip2.fill(strip2.Color(0, 0, 0));
+         strip1.show();
+         strip2.show();
+         delay(100);
+    }
+      strip1.fill(strip1.Color(255, 0, 0));
+      strip2.fill(strip2.Color(255, 0, 0));
+      strip1.show();
+      strip2.show();
+      blinks = 1;
+    }
+    else if(blinks == 1){
+        strip1.fill(strip1.Color(255, 0, 0));
+        strip2.fill(strip2.Color(255, 0, 0)); 
+        strip1.show();
+        strip2.show();
+        wait++;
+        if(LEFTstate==HIGH) LeftTurnSignal();
+        if(RIGHTstate==HIGH) RightTurnSignal();
+    }
+  }
+  else if(Brake == LOW && Reverse == LOW){
+    switch(mode){
+      case 0:
+        BrakeFlag = 0;
+        strip1.fill(strip1.Color(tailLight, 0, 0));
+        strip2.fill(strip2.Color(tailLight, 0, 0));
+        strip1.show();
+        strip2.show();
+        if(blinks ==1) wait++;
+        if(wait > 1000) {
+          blinks = 0;
+          wait = 0;
+        }
+        data2 = 0;
+//        Serial.print(wait);
+//        Serial.print('\n');
+        break;
+      
+      case 1:
+//        
+          BrakeFlag = 0;
+          //Serial.print(data2);
+          checkBluetooth();
+          switch (data2) {           
+            case 0: 
+              ShowMode0(0);
+              //Serial.print('0');
+              break;
+            case 1: 
+              ShowMode1(1);
+              //Serial.print('1');
+              break;
+            case 2: 
+              ShowMode2(2);
+              //Serial.print(data2);
+              break;
+            case 3: 
+              ShowMode3(3);
+              //Serial.print('3');
+              break;
+            case 4: 
+              ShowMode4(4);
+              //Serial.print('4');
+              break;
+            case 5: 
+              ShowMode5(5);
+              //Serial.print('5');
+              break;
+            case 6: 
+              ShowMode6(6);
+              //Serial.print('6');
+              break;
+            case 7: 
+              ShowMode7(7);
+              //Serial.print('7');
+              break;
+            case 8: 
+              ShowMode8(8);
+              //Serial.print('8');
+              break;
+            /*case 9: 
+              ShowMode9(9);
+              //Serial.print('9');
+              break;*/
+          }
+          
+
+        if(blinks ==1) wait++;
+        if(wait > 1000) {
+          blinks = 0;
+          wait = 0;
+        }
+//        Serial.print(wait);
+//        Serial.print('\n');
+        break;
+      case 2:
+         BrakeFlag = 0;
+         data2 = 0;
+         for(int pixel = 0; pixel<N_LEDS; pixel++){
+            strip1.setPixelColor(pixel, strip1.Color(255, 100, 0));
+            strip2.setPixelColor(pixel, strip2.Color(255, 100, 0));
+            strip1.show();
+            strip2.show();
+            delay(2);
+            if(digitalRead (b_BRAKE)== HIGH) break;
+            if(blinks ==1) wait++;
+            if(wait > 1000) {
+            blinks = 0;
+            wait = 0;
+        }
+          }
+        for(int w = 0; w<100; w++){
+          strip1.fill(strip1.Color(255, 100, 0));
+          strip2.fill(strip2.Color(255, 100, 0));
+          strip1.show();
+          strip2.show();
+          if(digitalRead (b_BRAKE)== HIGH) break;
+          if(blinks ==1) wait++;
+          if(wait > 1000) {
+          blinks = 0;
+          wait = 0;
+        }
+        }
+        for(int w = 0; w<25; w++){
+          strip1.fill(strip1.Color(0, 0, 0));
+          strip2.fill(strip2.Color(0, 0, 0));
+          strip1.show();
+          strip2.show();
+          if(digitalRead (b_BRAKE)== HIGH) break;
+          if(blinks ==1) wait++;
+          if(wait > 1000) {
+          blinks = 0;
+          wait = 0;
+        }
+        } 
+      break;
+      case 3:
+        BrakeFlag = 0;
+        data2 = 0;
+        RightTurnSignal();
+        if(wait > 1000) {
+          blinks = 0;
+          wait = 0;
+        }
+        break;
+      case 4:
+        BrakeFlag = 0;
+        data2 =0;
+        LeftTurnSignal();
+        if(wait > 1000) {
+          blinks = 0;
+          wait = 0;
+        }
+        break;
+    }
+  }
+  else if (Reverse == HIGH){
+      strip1.fill(strip1.Color(100, 100, 100));
+      strip2.fill(strip2.Color(100, 100, 100));
+      strip1.show();
+      strip2.show();
+  }
+}
+
+void EngineOn(){
+  Start = 1;
+}
+void Debouncing(){
+  debounceState = digitalRead(s_SHOW);
+    if(debounceState == HIGH){
+      if(debounce == 0){
+        for(int d = 0; d<10; d++){
+          continue;
+        }
+          Serial.print("TOGGLING SHOW");
+          Show^=1; debounce = 1;
+        }
+      else;
+    }
+    else debounce = 0;
+}
+
+void Show_Break(){
+  Debouncing();
+  if(digitalRead (b_BRAKE)== HIGH || digitalRead(b_REVERSE) == HIGH || Show == 0){
+    GetOut = 1; 
+    Show = 0;
+  }
+}
+
+void LeftTurnSignal(){
+         if(Brake==LOW){
+         strip2.fill(strip2.Color(tailLight, 0, 0));
+         strip2.show();
+         }
+         for(int pixel = 0; pixel<N_LEDS; pixel++){
+            strip1.setPixelColor(pixel, strip1.Color(255, 100, 0));
+            strip1.show();
+            delay(5);
+            if(BrakeFlag == 0){
+              if(digitalRead (b_BRAKE)== HIGH) break;
+              }
+            if(blinks ==1) wait++;
+          }
+        for(int w = 0; w<200; w++){
+          strip1.fill(strip1.Color(255, 100, 0));
+          strip1.show();
+          if(BrakeFlag == 0){
+            if(digitalRead (b_BRAKE)== HIGH) break;
+            }
+          if(blinks ==1) wait++;
+        }
+        for(int w = 0; w<50; w++){
+          strip1.fill(strip1.Color(tailLight, 0, 0));
+          strip1.show();
+          if(BrakeFlag == 0){
+            if(digitalRead (b_BRAKE)== HIGH) break;
+            }
+          if(blinks ==1) wait++;
+        }
+}
+
+void RightTurnSignal(){
+         if(Brake == LOW){
+         strip1.fill(strip1.Color(tailLight, 0, 0));
+         strip1.show();
+         }
+         for(int pixel = 0; pixel<N_LEDS; pixel++){
+            strip2.setPixelColor(pixel, strip2.Color(255, 100, 0));
+            strip2.show();
+            delay(5);
+            if(BrakeFlag == 0){
+            if(digitalRead (b_BRAKE)== HIGH) break;
+            }
+            if(blinks ==1) wait++;
+          }
+        for(int w = 0; w<200; w++){
+          strip2.fill(strip2.Color(255, 100, 0));
+          strip2.show();
+          if(BrakeFlag == 0){
+            if(digitalRead (b_BRAKE)== HIGH) break;
+            }
+          if(blinks ==1) wait++;
+        }
+        for(int w = 0; w<50; w++){
+          strip2.fill(strip2.Color(tailLight, 0, 0));
+          strip2.show();
+          if(BrakeFlag == 0){
+            if(digitalRead (b_BRAKE)== HIGH) break;
+            }
+          if(blinks ==1) wait++;
+        }
+}
+
+void Show_Change(){
+  if(digitalRead(Show_Up) == HIGH){
+    strip1.setBrightness(255);
+    strip2.setBrightness(255);
+    delay(500);
+    if(data2<8) data2++;
+    Serial.print("\n");
+  }
+  if(digitalRead(Show_Down) == HIGH){
+    strip1.setBrightness(255);
+    strip2.setBrightness(255);
+    delay(500);
+    if(data2>0) data2--;
+    if(data2==0) Show=0;
+  }
+  return;
+}
+
+void checkBluetooth() {
+  //Serial.print(Show);
+  Show_Break();
+  Show_Change();
+  if (Serial.available()>0) {
+    strip1.setBrightness(255);
+    strip2.setBrightness(255);
+    data = Serial.read();
+    if(data == '0') data2 = 0;
+    else if(data == '1') data2 = 1;
+    else if(data == '2') data2 = 2;
+    else if(data == '3') data2 = 3;
+    else if(data == '4') data2 = 4;
+    else if(data == '5') data2 = 5;
+    else if(data == '6') data2 = 6;
+    else if(data == '7') data2 = 7;
+    else if(data == '8') data2 = 8;
+    //else if(data == '9') data2 = 9;
+    //Serial.print(data2);
+  }
+}  
+
+// turn led's off
+void ShowMode0(int out) {
+    strip1.fill(strip1.Color(0,0,0));
+    strip2.fill(strip2.Color(0,0,0));
+    strip1.show();
+    strip2.show();
+  Debouncing();
+    checkBluetooth();
+    if(data2 != out) return;
+}
+
+
+// faster rainbow cycles
+void ShowMode1(int out) {
+    checkBluetooth();
+    if(data2 != out) return;
+    for(long firstPixelHue = 0; firstPixelHue < 3*65536; firstPixelHue += 256*2) {
+      checkBluetooth();
+      if(data2 != out) return;
+      for(int i=0; i<strip1.numPixels(); i++) { // For each pixel in strip...
+        checkBluetooth();
+        if(data2 != out) return;
+        int pixelHue = firstPixelHue + (i * 65536L / strip1.numPixels());
+        strip1.setPixelColor(i, strip1.gamma32(strip1.ColorHSV(pixelHue)));
+        strip2.setPixelColor(i, strip2.gamma32(strip2.ColorHSV(pixelHue)));
+      }
+      strip1.show();
+      strip2.show();
+      delay(wait);  // Pause for a moment
+      checkBluetooth();
+      if(data2 != out) return;
+    }
+}
+
+// running red and blue on two strips
+void ShowMode2(int out) {
+    checkBluetooth();
+    if(data2 != out) return;
+    for (int i=0; i<72; i++) {
+      checkBluetooth();
+      if(data2 != out) return;
+      strip1.setPixelColor(i, strip1.Color(255,0,0));
+      strip2.setPixelColor(i, strip2.Color(255,100,0));
+      strip1.show();
+      strip2.show();
+    }
+    for (int i=71; i>=0; i--) {
+      checkBluetooth();
+      if(data2 != out) return;
+      strip1.setPixelColor(i, strip1.Color(255,100,0));
+      strip2.setPixelColor(i, strip2.Color(255,0,0));
+      strip1.show();
+      strip2.show();
+    }
+}
+
+// Rainbow Breathing
+void ShowMode3(int out) {
+    checkBluetooth();
+    if(data2 != out) return;
+    for(int hue = 0; hue<65536;hue+=50){
+    for(int brightness = 0; brightness < 256; brightness ++) {
+      checkBluetooth();
+      if(data2 != out) return;
+      hue+=50;
+      strip1.fill(strip1.ColorHSV(hue));
+      strip1.setBrightness(brightness);
+      strip1.show();
+      strip2.fill(strip2.ColorHSV(hue));
+      strip2.setBrightness(brightness);
+      strip2.show();
+      delay(2);
+    }
+    for(int brightness = 255; brightness >= 0; brightness --) {
+      checkBluetooth();
+      if(data2 != out) return;
+      hue+=50;
+      strip1.fill(strip1.ColorHSV(hue));
+      strip1.setBrightness(brightness);
+      strip1.show();
+      strip2.fill(strip2.ColorHSV(hue));
+      strip2.setBrightness(brightness);
+      strip2.show();
+      delay(2);
+    }
+    checkBluetooth();
+  }
+}
+
+// breathing single color
+void ShowMode4(int out) {
+    checkBluetooth();
+    for(int brightness = 0; brightness < 256; brightness ++) {
+      checkBluetooth();
+      if(data2 != out) return;
+      strip1.fill(strip1.Color(23, 161, 165));
+      strip1.setBrightness(brightness);
+      strip1.show();
+      strip2.fill(strip2.Color(23, 161, 165));
+      strip2.setBrightness(brightness);
+      strip2.show();
+      delay(2);
+    }
+    for(int brightness = 255; brightness >= 0; brightness --) {
+      checkBluetooth();
+      if(data2 != out) return;
+      strip1.fill(strip1.Color(23, 161, 165));
+      strip1.setBrightness(brightness);
+      strip1.show();
+      strip2.fill(strip2.Color(23, 161, 165));
+      strip2.setBrightness(brightness);
+      strip2.show();
+      delay(2);
+    checkBluetooth();
+    if(data2 != out) return;
+  }
+}
+
+// bounce back and forth rainbow
+void ShowMode5(int out) {
+    checkBluetooth();
+    if(data2 != out) return;
+    for(int hue = 0; hue<=65535; hue+=7107){
+    for (int i = 75; i>=-4; i-=2) {
+      for (int y = i; y > i-4; y --) {
+        strip1.setPixelColor(y, strip1.ColorHSV(hue));
+        strip2.fill(strip2.Color(0,0,0));
+        strip1.show();     
+        strip2.show();  
+        checkBluetooth();
+        if(data2 != out) return;
+      }
+      //delay(2);
+      for(int z = i+1; z<=i+2;z++){
+      strip1.setPixelColor(z, strip1.Color(0,0,0));
+      strip1.show();    
+      }
+    }
+    for (int i = -4; i<76; i+=2) {
+      checkBluetooth();
+      if(data2 != out) return;
+      for (int y = i; y < i+4; y ++) {
+        strip2.setPixelColor(y, strip2.ColorHSV(hue));
+        strip1.fill(strip1.Color(0,0,0));
+        strip1.show();     
+        strip2.show();  
+      }
+      //delay(2);
+      for(int z = i-1; z>=i-2;z--){
+      strip2.setPixelColor(z, strip2.Color(0,0,0));
+      strip2.show();    
+      }
+    }
+    hue+=7107;
+    for (int i = 75; i>=-4; i-=2) {
+      checkBluetooth();
+      if(data2 != out) return;
+      for (int y = i; y > i-4; y --) {
+        strip2.setPixelColor(y, strip2.ColorHSV(hue));
+        strip1.fill(strip1.Color(0,0,0));
+        strip1.show();     
+        strip2.show();  
+      }
+      //delay(2);
+      for(int z = i+1; z<=i+2;z++){
+      strip2.setPixelColor(z, strip2.Color(0,0,0));
+      strip2.show();    
+      }
+    }
+    for (int i = -4; i<76; i+=2) {
+      checkBluetooth();
+      if(data2 != out) return;
+      for (int y = i; y < i+4; y ++) {
+        strip1.setPixelColor(y, strip1.ColorHSV(hue));
+        strip2.fill(strip2.Color(0,0,0));
+        strip1.show();     
+        strip2.show();  
+      }
+      //delay(2);
+      for(int z = i-1; z>=i-2;z--){
+      strip1.setPixelColor(z, strip1.Color(0,0,0));
+      strip1.show();    
+      }
+    }
+    }
+}
+
+void ShowMode6(int out) {
+    checkBluetooth();
+    if(data2 != out) return;
+    for(int q = 71; q >= 0; q-=2) {
+    for(int i = 0; i < q; i++) {
+      checkBluetooth();
+      if(data2 != out) return;
+      for(int r = i; r>i-2; r--){
+      strip1.setPixelColor(r, strip1.Color(0,0,255));
+      strip1.show();
+      strip2.setPixelColor(r, strip2.Color(0,0,255));
+      strip2.show();
+      }
+      //delay(2);
+      strip1.setPixelColor(i-3, strip1.Color(0,0,0));
+      strip1.show();
+      strip2.setPixelColor(i-3, strip2.Color(0,0,0));
+      strip2.show();    
+    }
+      for(int g = q; g>q-2;g--){
+      strip1.setPixelColor(q, strip1.Color(255,0,0));
+      strip1.show();
+      strip2.setPixelColor(q, strip2.Color(255,0,0));
+      strip2.show();
+      }
+    }
+    for(int e = 0; e<3; e++){
+      for(int o = 0; o < 75; o++){
+        checkBluetooth();
+        if(data2 != out) return;
+        strip1.fill(strip1.Color(255, 0, 0));
+        strip2.fill(strip2.Color(255, 0, 0));
+        strip1.show();
+        strip2.show();
+      }
+      for(int o = 0; o < 75; o++){
+        checkBluetooth();
+        if(data2 != out) return;
+        strip1.fill(strip1.Color(0, 0, 0));
+        strip2.fill(strip2.Color(0, 0, 0));
+        strip1.show();
+        strip2.show();
+      }
+    }
+      strip1.fill(strip1.Color(0, 0, 0));
+      strip2.fill(strip2.Color(0, 0, 0));
+      strip1.show();
+      strip2.show();
+    checkBluetooth();
+    if(data2 != out) return;
+  }
+
+// half and half on two strips
+void ShowMode7(int out) {
+    checkBluetooth();
+    if(data2 != out) return;
+    for (int i=0; i<3; i++) {
+      checkBluetooth();
+      if(data2 != out) return;
+      strip1.fill(strip1.Color(255,0,0));
+      strip2.fill(strip2.Color(0,0,255));
+      strip1.show();
+      strip2.show();
+      delay(30);
+      strip1.fill(strip1.Color(0,0,0));
+      strip2.fill(strip2.Color(0,0,0));
+      strip1.show();
+      strip2.show();
+      delay(30);
+    }
+    delay(300);
+
+   for (int i=0; i<3; i++) {
+      checkBluetooth();
+      if(data2 != out) return;
+      strip1.fill(strip1.Color(0,0,255));
+      strip2.fill(strip2.Color(255,0,0));
+      strip1.show();
+      strip2.show();
+      delay(30);
+      strip1.fill(strip1.Color(0,0,0));
+      strip2.fill(strip2.Color(0,0,0));
+      strip1.show();
+      strip2.show();
+      delay(30);
+    }
+    delay(300);
+}
+
+
+// alternating police lights
+void ShowMode8(int out) {
+    checkBluetooth();
+    if(data2 != out) return;
+    for (int i=0; i<3; i++) {
+      for (int n=0; n<strip1.numPixels(); n++) {
+      checkBluetooth();
+      if(data2 != out) return;
+      strip1.setPixelColor(n, strip1.Color(255,0,0));
+      }
+      strip1.show();
+      delay(30);
+      strip1.fill(strip1.Color(0,0,0));
+      delay(10);
+      strip1.show();
+      delay(30);
+    }
+    strip1.fill(strip1.Color(0,0,0));
+    strip1.show();
+    delay(300);
+
+    for (int i=0; i<3; i++) {
+      for (int n=0; n<strip2.numPixels(); n++) {
+      checkBluetooth();
+      if(data2 != out) return;
+      strip2.setPixelColor(n, strip2.Color(0,0,255));
+      }
+      strip2.show();
+      delay(30);
+      strip2.fill(strip2.Color(0,0,0));
+      delay(10);
+      strip2.show();
+      delay(30);
+    }
+    strip2.fill(strip2.Color(0,0,0));
+    strip2.show();
+    delay(300);
+    checkBluetooth();
+    if(data2 != out) return;
+}
+
+// half and half police lights
+/*
+void ShowMode4(int out) {
+    checkBluetooth();
+    if(data2 != out) return;
+    for (int i=0; i<3; i++) {
+      checkBluetooth();
+      if(data2 != out) return;
+      for (int n=0; n<strip1.numPixels()/2; n++) {
+        strip1.setPixelColor(n, strip1.Color(255,0,0));
+      }
+      for (int n=0; n<strip2.numPixels()/2; n++) {
+        strip2.setPixelColor(n, strip2.Color(0,0,255));
+      }
+      strip1.show();
+      strip2.show();
+      delay(10);
+      strip1.fill(strip1.Color(0,0,0));
+      strip2.fill(strip2.Color(0,0,0));
+      delay(10);
+      strip1.show();
+      strip2.show();
+      delay(10);
+    }
+    strip1.fill(strip1.Color(0,0,0));
+    strip2.fill(strip2.Color(0,0,0));
+    strip1.show();
+    strip2.show();
+    delay(300);
+
+    for (int i=0; i<3; i++) {
+      checkBluetooth();
+      if(data2 != out) return;
+      for (int n=strip1.numPixels()/2; n<strip1.numPixels(); n++) {
+        strip1.setPixelColor(n, strip1.Color(255,0,0));
+      }
+      for (int n=strip2.numPixels()/2; n<strip2.numPixels(); n++) {
+        strip2.setPixelColor(n, strip2.Color(0,0,255));
+      }
+      strip1.show();
+      strip2.show();
+      delay(10);
+      strip1.fill(strip2.Color(0,0,0));
+      strip2.fill(strip2.Color(0,0,0));
+      delay(10);
+      strip1.show();
+      strip2.show();
+      delay(10);
+    }
+    strip1.fill(strip1.Color(0,0,0));
+    strip2.fill(strip2.Color(0,0,0));
+    strip1.show();
+    strip2.show();
+    delay(300);
+
+    for (int i=0; i<3; i++) {
+      checkBluetooth();
+      if(data2 != out) return;
+      for (int n=0; n<strip1.numPixels(); n++) {
+        strip1.setPixelColor(n, strip1.Color(255,0,0));
+      }
+      strip1.show();
+      delay(10);
+      strip1.fill(strip1.Color(0,0,0));
+      delay(10);
+      strip1.show();
+      delay(10);
+    }
+    strip1.fill(strip1.Color(0,0,0));
+    strip1.show();
+    delay(300);
+
+    for (int i=0; i<3; i++) {
+      checkBluetooth();
+      if(data2 != out) return;
+      for (int n=0; n<strip2.numPixels(); n++) {
+        strip2.setPixelColor(n, strip2.Color(0,0,255));
+      }
+      strip2.show();
+//      Serial.print("FUCKING HELL\n");
+      delay(10);
+      strip2.fill(strip2.Color(0,0,0));
+      delay(10);
+      strip2.show();
+      delay(10);
+    }
+    strip2.fill(strip2.Color(0,0,0));
+    strip2.show();
+    delay(300);
+}
+*/
+
+
+
