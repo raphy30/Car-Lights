@@ -871,7 +871,6 @@ void ShowMode4(int out) {
         strip2.setPixelColor(n, strip2.Color(0,0,255));
       }
       strip2.show();
-//      Serial.print("FUCKING HELL\n");
       delay(10);
       strip2.fill(strip2.Color(0,0,0));
       delay(10);
